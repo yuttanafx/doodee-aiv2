@@ -18,10 +18,12 @@ const SYMBOLS: [string, string][] = [
   ['BTCUSD', 'BINANCE:BTCUSDT'], ['US30', 'OANDA:US30USD'], ['NAS100', 'OANDA:NAS100USD'], ['USOIL', 'TVC:USOIL'],
 ];
 const TFS: [string, string][] = [['M5', '5'], ['M15', '15'], ['H1', '60'], ['H4', '240'], ['D', 'D']];
-// Preset live channels (YouTube channel IDs). They can be swapped at any time with the paste box below; a channel that is not live right now simply shows nothing.
+// Preset live channels (YouTube channel IDs, checked against public listings: Bloomberg Television, CNBC Television, Yahoo Finance, Reuters). They can be swapped at any time with the paste box below; a channel that is not live right now simply shows nothing.
 const CHANNELS: [string, string][] = [
-  ['Bloomberg', 'UCIALMKvObZNtJ6AmdCLP7Lg'], ['Sky News', 'UCoMdktPbSTixAyNGwb-UYkQ'], ['Al Jazeera', 'UCNye-wNBqNL5ZzHSJj3l8Bg'],
+  ['Bloomberg', 'UCIALMKvObZNtJ6AmdCLP7Lg'], ['CNBC', 'UCrp_UI8XtuYfpiqluWLD7Lw'], ['Yahoo Finance', 'UCEAZeUIeJs0IjQiqTCdVSIg'], ['Reuters', 'UChqUTb7kYRX8-EiaN3XFrSQ'],
 ];
+// Thai stock-news channels: resolved to a channel ID by /api/yt when clicked ('user:' = legacy YouTube username).
+const TH_CHANNELS: [string, string][] = [['Money Channel', '@moneychannelthailandth'], ['SET', 'user:setgroupofficial'], ['TNN', 'user:tnn24official']];
 
 // Turn anything a person pastes into an embeddable URL: YouTube (watch / live / youtu.be / channel), Twitch, Facebook, Vimeo, or a direct mp4/webm/m3u8 file.
 export function toEmbed(raw: string): { kind: 'iframe' | 'video'; src: string } | null {
@@ -56,6 +58,16 @@ function TV({ src, config, height }: { src: string; config: Record<string, any>;
   return <div className="tradingview-widget-container" ref={box} style={{ height, width: '100%' }} />;
 }
 
+const liveSrc = (id: string) => `https://www.youtube.com/embed/live_stream?channel=${id}&autoplay=1&mute=1`;
+async function resolveChannel(ref: string): Promise<string | null> {
+  try { const r = await fetch('/api/yt?h=' + encodeURIComponent(ref)); const j = await r.json(); return r.ok ? String(j.id) : null; } catch { return null; }
+}
+// a pasted youtube.com/@name, /user/name or /c/name link -> a handle reference for the resolver
+function handleOf(raw: string): string | null {
+  try { const u = new URL(/^https?:\/\//i.test(raw.trim()) ? raw.trim() : 'https://' + raw.trim()); if (u.hostname.replace(/^www\.|^m\./, '') !== 'youtube.com') return null;
+    const a = u.pathname.match(/^\/(@[\w.\-]+)/); if (a) return a[1]; const b = u.pathname.match(/^\/(?:user|c)\/([\w.\-]+)/); return b ? 'user:' + b[1] : null; } catch { return null; }
+}
+
 export default function MarketDesk({ pw, hasKey, onLogin, loginErr, acctHeader }: Props) {
   const { t, lang } = useLang();
   const [sym, setSym] = useState(SYMBOLS[0]);
@@ -66,6 +78,7 @@ export default function MarketDesk({ pw, hasKey, onLogin, loginErr, acctHeader }
   const [custom, setCustom] = useState('');
   const [embed, setEmbed] = useState<{ kind: 'iframe' | 'video'; src: string } | null>(null);
   const [urlErr, setUrlErr] = useState('');
+  const [vBusy, setVBusy] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
@@ -114,10 +127,17 @@ export default function MarketDesk({ pw, hasKey, onLogin, loginErr, acctHeader }
     recRef.current = r; setListening(true); r.start();
   };
 
-  const applyUrl = () => {
-    const e = toEmbed(custom); setUrlErr('');
+  const applyUrl = async () => {
+    setUrlErr('');
+    let e = toEmbed(custom);
+    if (!e) { const h = handleOf(custom); if (h) { setVBusy(true); const id = await resolveChannel(h); setVBusy(false); if (id) e = { kind: 'iframe', src: liveSrc(id) }; } }
     if (!e) { setUrlErr(t('ลิงก์นี้ฝังไม่ได้ ใช้ลิงก์ YouTube / Twitch / Facebook / Vimeo หรือไฟล์ .mp4', 'Cannot embed this link. Use a YouTube / Twitch / Facebook / Vimeo link or an .mp4 file.')); return; }
     setEmbed(e); try { localStorage.setItem('deskvideo', custom.trim()); } catch {}
+  };
+  const pickThai = async (name: string, ref: string) => {
+    setUrlErr(''); setVBusy(true); const id = await resolveChannel(ref); setVBusy(false);
+    if (!id) { setUrlErr(t(`หาช่อง ${name} ไม่เจอ ลองวางลิงก์ไลฟ์ของช่องนี้ในช่องด้านล่างแทน`, `Could not find ${name}. Paste its live link below instead.`)); return; }
+    setCustom(''); setEmbed({ kind: 'iframe', src: liveSrc(id) });
   };
   const clearUrl = () => { setEmbed(null); setCustom(''); setUrlErr(''); try { localStorage.removeItem('deskvideo'); } catch {} };
 
@@ -191,14 +211,19 @@ export default function MarketDesk({ pw, hasKey, onLogin, loginErr, acctHeader }
           <div className="row">
             {CHANNELS.map(([n, id]) => <button key={id} className={'btn desk-pill' + (!embed && chan === id ? ' main' : '')} onClick={() => { clearUrl(); setChan(id); }}>{n}</button>)}
           </div>
+          <div className="row">
+            <span className="sub">{t('ข่าวหุ้นไทย', 'Thai stocks')}</span>
+            {TH_CHANNELS.map(([n, ref]) => <button key={ref} className="btn desk-pill" disabled={vBusy} onClick={() => pickThai(n, ref)}>{n}</button>)}
+            {vBusy && <span className="mute">{t('กำลังเชื่อมต่อ…', 'Connecting…')}</span>}
+          </div>
           <div className="desk-video">
             {embed?.kind === 'video'
               ? <video src={embed.src} controls autoPlay muted playsInline style={{ width: '100%', height: '100%' }} />
-              : <iframe title={t('วิดีโอข่าว', 'News video')} src={embed?.src ?? `https://www.youtube.com/embed/live_stream?channel=${chan}&autoplay=1&mute=1`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />}
+              : <iframe title={t('วิดีโอข่าว', 'News video')} src={embed?.src ?? liveSrc(chan)} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />}
           </div>
           <div className="row">
-            <input aria-label={t('ลิงก์วิดีโอ', 'Video link')} style={{ flex: '1 1 200px' }} value={custom} placeholder={t('วางลิงก์ YouTube Live / Twitch / Facebook / .mp4', 'Paste a YouTube Live / Twitch / Facebook / .mp4 link')} onChange={(e) => setCustom(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyUrl(); }} />
-            <button className="btn main" onClick={applyUrl}>{t('เชื่อมต่อ', 'Connect')}</button>
+            <input aria-label={t('ลิงก์วิดีโอ', 'Video link')} style={{ flex: '1 1 200px' }} value={custom} placeholder={t('วางลิงก์ YouTube Live / @ชื่อช่อง / Twitch / Facebook / .mp4', 'Paste a YouTube Live / @channel / Twitch / Facebook / .mp4 link')} onChange={(e) => setCustom(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyUrl(); }} />
+            <button className="btn main" disabled={vBusy} onClick={applyUrl}>{t('เชื่อมต่อ', 'Connect')}</button>
             {embed && <button className="btn" onClick={clearUrl}>{t('ล้าง', 'Clear')}</button>}
           </div>
           {urlErr && <div className="err" role="alert">{urlErr}</div>}
