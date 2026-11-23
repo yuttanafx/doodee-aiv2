@@ -18,18 +18,15 @@ const LINE_URL = 'https://lin.ee/W3nixLK';
 const LINE_ICON = 'M21 11.5C21 7.4 16.97 4 12 4S3 7.4 3 11.5c0 3.6 3.2 6.6 7.5 7.4l-.3 2.1 4.3-2.6C18.7 17.5 21 14.8 21 11.5Z';
 const PLANE = 'M21.5 3.5 2.8 10.7c-.9.4-.9 1.2 0 1.5l4.6 1.4 1.8 5.5c.2.6.9.7 1.3.3l2.6-2.4 4.7 3.5c.7.5 1.4.2 1.6-.7l3.1-15.2c.2-1-.4-1.5-1-1.1ZM8 13.4l9.6-6-7.4 7.2-.3 3.2L8 13.4Z';
 
-function HeroStage() {
-  const { t } = useLang();
-  const cv = useRef<HTMLCanvasElement>(null);
-  const [phase, setPhase] = useState(0);
-
+// Same animation loop as before, now shared by the demo stage and the laptop in the hero.
+function useScene(cv: React.RefObject<HTMLCanvasElement>, onPhase?: (p: number) => void) {
   useEffect(() => {
     const el = cv.current!, ctx = el.getContext('2d')!;
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
     let raf = 0, w = 0, h = 0, clock = reduce ? PHASE_AT[4] + 2600 : 0, last = performance.now(), lastPhase = -1, frames = 0, onScreen = true;
     let col = readColors();
     const paint = () => {
-      const p = phaseOf(clock); if (p !== lastPhase) { lastPhase = p; setPhase(p); }
+      const p = phaseOf(clock); if (p !== lastPhase) { lastPhase = p; onPhase?.(p); }
       if (frames++ % 120 === 0) col = readColors();     // follows the day / night switch
       drawScene(ctx, w, h, clock, col);
     };
@@ -50,7 +47,14 @@ function HeroStage() {
     document.addEventListener('visibilitychange', vis);
     size(); start();
     return () => { stop(); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', vis); };
-  }, []);
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+function HeroStage() {
+  const { t } = useLang();
+  const cv = useRef<HTMLCanvasElement>(null);
+  const [phase, setPhase] = useState(0);
+  useScene(cv, setPhase);
 
   return (
     <div className="lp-stage" data-p={phase}>
@@ -85,6 +89,44 @@ function HeroStage() {
   );
 }
 
+// Sample (simulated) figures for the hero ticker / panels. Not live market data; the page says so under the panels.
+const TICKER = [
+  { s: 'XAUUSD', p: '2,418.50', c: '+12.30 (+0.51%)', up: true, ic: '🥇' },
+  { s: 'BTCUSD', p: '107,850.20', c: '+1,245.30 (+1.17%)', up: true, ic: '₿' },
+  { s: 'EURUSD', p: '1.1635', c: '+0.0031 (+0.27%)', up: true, ic: '€' },
+  { s: 'USDJPY', p: '154.72', c: '−0.18 (−0.12%)', up: false, ic: '$' },
+];
+const SIGNALS = [
+  { side: 'BUY', sym: 'XAUUSD', price: '2,418.50', time: '10:32' },
+  { side: 'SELL', sym: 'EURUSD', price: '1.1635', time: '10:28' },
+  { side: 'BUY', sym: 'GBPUSD', price: '1.3330', time: '10:25' },
+  { side: 'SELL', sym: 'USDJPY', price: '154.72', time: '10:20' },
+  { side: 'BUY', sym: 'BTCUSD', price: '107,835', time: '10:15' },
+];
+const CALENDAR = [
+  { time: '14:30', cur: 'USD', ev: 'Core Retail Sales m/m', imp: 'High' },
+  { time: '15:00', cur: 'USD', ev: 'Fed Chair Powell Speaks', imp: 'High' },
+  { time: '17:00', cur: 'EUR', ev: 'ECB President Lagarde Speaks', imp: 'Med' },
+  { time: '19:30', cur: 'USD', ev: 'Crude Oil Inventories', imp: 'Med' },
+  { time: '20:00', cur: 'USD', ev: 'FOMC Member Daly Speaks', imp: 'Low' },
+];
+
+// Laptop in the hero: the same simulated candle scene, drawn on a dark screen.
+function LaptopHero() {
+  const cv = useRef<HTMLCanvasElement>(null);
+  useScene(cv);
+  return (
+    <div className="lp2-laptop" aria-hidden="true">
+      <div className="lp2-screen">
+        <canvas ref={cv} className="lp2-screen-cv" />
+        <div className="lp2-quote"><span>XAUUSD</span><b>2,418.50</b><em>+12.30 (+0.51%)</em></div>
+        <div className="lp2-tfs">{['M1', 'M5', 'M15', 'H1', 'H4', 'D1'].map((x) => <i key={x} className={x === 'H1' ? 'on' : ''}>{x}</i>)}</div>
+      </div>
+      <div className="lp2-base" />
+    </div>
+  );
+}
+
 export default function Landing({ themeBtn, children, onLogin, loginErr }: { themeBtn: ReactNode; children: ReactNode; onLogin?: (pw: string) => Promise<void> | void; loginErr?: string }) {
   const { t } = useLang();
   const [origin, setOrigin] = useState('');
@@ -106,10 +148,12 @@ export default function Landing({ themeBtn, children, onLogin, loginErr }: { the
     { t: t("กดสั่งในเทเลแกรม","Tap to order in Telegram"), d: t("เลือกคู่ ดูแนวรับต้านกับ SL และ TP1–3 พร้อม RR ของแต่ละระดับ กดยืนยันแล้ว EA เปิดไม้ให้","Pick a pair, review support/resistance, SL and TP1–3 with each level's RR, confirm, and the EA opens the trade"), icon: PLANE },
   ];
   const feats = [
-    { h: 'AI Signal Analysis', d: t("วิเคราะห์สัญญาณด้วย AI","AI-powered signals"), icon: 'M4 20V10M10 20V4M16 20v-7M22 20V8' },
-    { h: 'Smart EA Trading', d: t("เทรดอัตโนมัติอัจฉริยะ","Smart auto trading"), icon: 'M12 3v3M12 18v3M3 12h3M18 12h3M7 7h10v10H7z' },
-    { h: 'Real-Time Monitoring', d: t("ติดตามแบบเรียลไทม์","Live monitoring"), icon: 'M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Zm-3 9 2.5 2.5L16 9.5' },
-    { h: 'Multi-Platform Support', d: t("รองรับหลายแพลตฟอร์ม","Works across platforms"), icon: 'M7 18a4 4 0 0 1-.6-8A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5H7Z' },
+    { h: 'AI Analysis', d: t("วิเคราะห์หลายรูปแบบ ตัดสินใจอย่างชาญฉลาด","Multi-pattern analysis, smart decisions"), icon: 'M4 20V10M10 20V4M16 20v-7M22 20V8', href: '#demo-sec' },
+    { h: 'MT5 EA', d: t("เทรดอัตโนมัติ 24/7 พร้อมบริหารความเสี่ยง","Auto trade 24/7 with risk management"), icon: 'M12 3v3M12 18v3M3 12h3M18 12h3M7 7h10v10H7z', href: '#get-started' },
+    { h: 'Telegram Control', d: t("รับสัญญาณและควบคุมการเทรด","Receive signals, control trading"), icon: PLANE, href: '#telegram' },
+    { h: 'Multi-Asset', d: t("Forex / ทอง / คริปโต / ดัชนี","Forex / Gold / Crypto / Indices"), icon: 'M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5', href: '#desk' },
+    { h: 'Market News', d: t("ปฏิทินเศรษฐกิจและวิเคราะห์ตลาด","Economic calendar, market analysis"), icon: 'M4 5h13v14H4zM17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5', href: '#desk' },
+    { h: 'Risk Management', d: t("ตั้งลิมิตขาดทุนรายวัน ปกป้องเงินทุน","Set daily loss limit, protect capital"), icon: 'M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Zm-3 9 2.5 2.5L16 9.5', href: '#safe-sec' },
   ];
   const points = [
     [t("แยกไม้ออโต้กับไม้ที่กดเอง","Auto trades and manual trades kept apart"), t("ไม้ที่สั่งจากเทเลแกรมใช้ Magic Number คนละชุดกับไม้ออโต้ กริดและ Recovery จึงไม่แตะไม้ที่คุณกดเอง","Trades placed from Telegram use a different Magic Number from auto trades, so grid and Recovery never touch the ones you open yourself")],
@@ -120,33 +164,85 @@ export default function Landing({ themeBtn, children, onLogin, loginErr }: { the
 
   return (
     <div className="lp">
-      <header className="lp-nav">
-        <a className="lp-brand" href="#top"><span className="lp-mark"><i /><i /><i /></span>MT5 Signal Hub</a>
-        <div className="row"><LangBtn />{themeBtn}<a className="btn lp-line-btn lp-nav-line" href={LINE_URL} target="_blank" rel="noopener noreferrer">{t("ติดต่อเรา","Contact us")}</a><a className="btn" href="#login">{t("เข้าสู่ระบบ","Log in")}</a></div>
+      <header className="lp2-nav">
+        <a className="lp2-brand" href="#top"><span className="lp2-logo" aria-hidden="true"><i /><i /><i /></span><span><b>Pichai Fintech</b><small>MT5 Signal Hub</small></span></a>
+        <nav className="lp2-links" aria-label="Main">
+          <a className="on" href="#top">{t("หน้าแรก","Home")}</a>
+          <a href="#platform">{t("แพลตฟอร์ม","Platform")}</a>
+          <a href="#signals">{t("สัญญาณ AI","AI Signals")}</a>
+          <a href="#get-started">MT5 EA</a>
+          <a href="#telegram">Telegram</a>
+          <a href="#desk">{t("ข่าวตลาด","Market News")}</a>
+          <a href="#login">{t("สมาชิก","Member")}</a>
+        </nav>
+        <div className="lp2-actions"><LangBtn />{themeBtn}<a className="btn lp-line-btn lp-nav-line" href={LINE_URL} target="_blank" rel="noopener noreferrer">{t("ติดต่อเรา","Contact us")}</a><a className="btn lp2-login-btn" href="#login">{t("เข้าสู่ระบบ / สมัคร","Login / Sign Up")}</a></div>
       </header>
 
-      <section className="lp-hero2" id="top">
-        <div className="lp-left">
-          <img className="lp-robot" src="/hero-robot.jpg" alt="" width={400} height={468} decoding="async" />
-          <div className="lp-copy2">
-            <h1 className="lp-h1">{t("AI วิเคราะห์สภาพตลาดทุกคู่เงิน แล้วเลือก","AI reads the market on every pair, then picks ")}<em className="lp-grad">{t("กลยุทธ์ที่ใช่ให้","the right strategy for you")}</em></h1>
-            <p className="lp-lead">{t("AI อ่านว่าแต่ละคู่เงินกำลังเทรนขึ้น เทรนลง หรือไซด์เวย์ แล้วเลือกกลยุทธ์ที่รองรับ เซิร์ฟเวอร์ตรวจเงื่อนไขของกลยุทธ์ก่อนทุกครั้ง AI ไม่ได้สั่งเทรนเอง คุณกดสั่งพร้อมแผน SL/TP/RR ได้จากเทเลแกรม","AI reads whether each pair is trending up, down or sideways, then picks a supported strategy. The server checks the strategy's conditions every time. The AI never trades on its own: you tap to order, with an SL/TP/RR plan, from Telegram.")}</p>
-            <div className="row">
-              <a className="btn main lp-cta" href={EA_URL} rel="noopener"><Icon d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" size={20} />{t("ดาวน์โหลด EA","Download EA")}</a>
-              <a className="btn lp-cta lp-tg-btn" href={TG_URL} target="_blank" rel="noopener noreferrer"><Icon d={PLANE} size={20} />{t("เปิดบอทเทเลแกรม","Open Telegram bot")}</a>
-            </div>
-            <div className="mute">{t("สำหรับ MetaTrader 5 · เชื่อมกับเว็บด้วยรหัสจากผู้ดูแล","For MetaTrader 5 · connect to the site with a code from your admin")}</div>
+      <section className="lp2-hero" id="top">
+        <div className="lp2-copy">
+          <h1 className="lp2-h1">Pichai Fintech<em>AI Trading Intelligence Platform</em></h1>
+          <p className="lp2-tag"><span>{t("เทรดฉลาดขึ้น","Smarter Trading")}</span><i />{t("ประสิทธิภาพสูงขึ้น","Higher Performance")}<i />{t("กำไรมากขึ้น","Greater Profit")}</p>
+          <p className="lp-lead">{t("AI อ่านว่าแต่ละคู่เงินกำลังเทรนขึ้น เทรนลง หรือไซด์เวย์ แล้วเลือกกลยุทธ์ที่รองรับ เซิร์ฟเวอร์ตรวจเงื่อนไขของกลยุทธ์ก่อนทุกครั้ง AI ไม่ได้สั่งเทรนเอง คุณกดสั่งพร้อมแผน SL/TP/RR ได้จากเทเลแกรม","AI reads whether each pair is trending up, down or sideways, then picks a supported strategy. The server checks the strategy's conditions every time. The AI never trades on its own: you tap to order, with an SL/TP/RR plan, from Telegram.")}</p>
+          <div className="row">
+            <a className="btn main lp-cta lp2-cta" href={EA_URL} rel="noopener"><Icon d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" size={20} />{t("เริ่มเทรดเลย (ดาวน์โหลด EA)","Start Trading Now")}</a>
+            <a className="btn lp-cta lp2-ghost" href="#how"><Icon d="M8 5v14l11-7z" size={18} />{t("ดูเพิ่มเติม","Learn More")}</a>
           </div>
-          <ul className="lp-feats">
-            {feats.map((f, i) => (
-              <li key={f.h} className="lp-feat" style={{ animationDelay: `${0.35 + i * 0.08}s` }}>
-                <span className="lp-feat-ic"><Icon d={f.icon} size={28} /></span>
-                <b>{f.h}</b><span>{f.d}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="mute">{t("สำหรับ MetaTrader 5 · เชื่อมกับเว็บด้วยรหัสจากผู้ดูแล","For MetaTrader 5 · connect to the site with a code from your admin")}</div>
         </div>
-        <div className="lp-login lp-login-hero" id="login">{children}</div>
+        <LaptopHero />
+      </section>
+
+      <section className="lp2-ticker" aria-label={t("ตัวอย่างราคา (จำลอง)","Sample prices (simulated)")}>
+        {TICKER.map((x) => (
+          <div key={x.s} className="lp2-tick"><span className="lp2-tick-ic" aria-hidden="true">{x.ic}</span><b>{x.s}</b><span>{x.p}</span><em className={x.up ? 'up' : 'dn'}>{x.c}</em></div>
+        ))}
+      </section>
+
+      <section className="lp2-feats" id="platform" aria-label={t("ฟีเจอร์","Features")}>
+        {feats.map((f, i) => (
+          <a key={f.h} href={f.href} className="lp2-feat rv" style={{ transitionDelay: `${i * 60}ms` }}>
+            <span className="lp2-feat-ic"><Icon d={f.icon} size={30} /></span>
+            <b>{f.h}</b><span>{f.d}</span>
+            <i className="lp2-go" aria-hidden="true">→</i>
+          </a>
+        ))}
+      </section>
+
+      <section className="lp2-panels" id="signals" aria-label={t("สัญญาณ ปฏิทินเศรษฐกิจ และเทเลแกรม","Signals, economic calendar and Telegram")}>
+        <div className="lp2-panel rv">
+          <div className="lp2-panel-h"><span>{t("สัญญาณล่าสุด","Latest Signals")}</span><a href="#login">{t("ดูทั้งหมด","View All")} →</a></div>
+          <div className="tblwrap"><table className="lp2-tbl">
+            <thead><tr><th>{t("สัญญาณ","Signal")}</th><th>{t("สัญลักษณ์","Symbol")}</th><th>{t("ทิศทาง","Direction")}</th><th>{t("ราคา","Price")}</th><th>{t("เวลา","Time")}</th></tr></thead>
+            <tbody>{SIGNALS.map((x) => (
+              <tr key={x.sym}><td className={x.side === 'BUY' ? 'up' : 'dn'}><b>{x.side}</b></td><td>{x.sym}</td><td className={x.side === 'BUY' ? 'up' : 'dn'}>{x.side === 'BUY' ? '▲' : '▼'}</td><td>{x.price}</td><td>{x.time}</td></tr>
+            ))}</tbody>
+          </table></div>
+        </div>
+
+        <div className="lp2-panel rv" style={{ transitionDelay: '80ms' }}>
+          <div className="lp2-panel-h"><span>{t("ปฏิทินเศรษฐกิจ","Economic Calendar")}</span><a href="#desk">{t("ดูทั้งหมด","View All")} →</a></div>
+          <div className="tblwrap"><table className="lp2-tbl">
+            <thead><tr><th>{t("เวลา","Time")}</th><th>{t("สกุลเงิน","Currency")}</th><th>{t("เหตุการณ์","Event")}</th><th>{t("ผลกระทบ","Impact")}</th></tr></thead>
+            <tbody>{CALENDAR.map((x) => (
+              <tr key={x.ev}><td>{x.time}</td><td>{x.cur}</td><td>{x.ev}</td><td><span className={`lp2-imp ${x.imp.toLowerCase()}`}>{x.imp}</span></td></tr>
+            ))}</tbody>
+          </table></div>
+        </div>
+
+        <div className="lp2-panel lp2-tgp rv" id="telegram" style={{ transitionDelay: '160ms' }}>
+          <div className="lp2-panel-h"><span><Icon d={PLANE} size={18} /> {t("ควบคุมการเทรดผ่านเทเลแกรม","Telegram Trade Control")}</span></div>
+          <div className="lp2-tg-body">
+            <div className="lp2-tg-ok">✓ {t("เชื่อมต่อแล้ว","Connected")}</div>
+            <div className="lp2-tg-order"><b className="up">BUY XAUUSD</b><span>Lot: 0.01 | SL: 2,406.00 | TP: 2,442.00</span></div>
+            <a className="btn lp-cta lp-tg-btn lp2-tg-cta" href={TG_URL} target="_blank" rel="noopener noreferrer"><Icon d={PLANE} size={18} />{t("เปิดบอทเทเลแกรม","Open Telegram bot")}</a>
+          </div>
+        </div>
+        <div className="mute lp-note lp2-note">{t("ราคา สัญญาณ และข้อความในแผงนี้เป็นตัวอย่างจำลอง ไม่ใช่ข้อมูลตลาดจริง","Prices, signals and messages in these panels are simulated examples, not real market data.")}</div>
+      </section>
+
+      <section className="lp-sec lp2-loginsec" id="login" aria-label={t("สมาชิก","Member")}>
+        <h2 className="lp-h2 rv">{t("สมาชิก: เข้าสู่ระบบ / สมัครใช้งาน","Member: log in / sign up")}</h2>
+        <div className="lp-login lp-login-hero lp2-login">{children}</div>
       </section>
 
       <section className="lp-sec" id="desk" aria-labelledby="desk-h">
@@ -154,14 +250,14 @@ export default function Landing({ themeBtn, children, onLogin, loginErr }: { the
         <MarketDesk pw="" hasKey={false} onLogin={onLogin} loginErr={loginErr} />
       </section>
 
-      <section className="lp-sec" aria-labelledby="demo">
+      <section className="lp-sec" id="demo-sec" aria-labelledby="demo">
         <h2 id="demo" className="lp-h2 rv">{t("ดูการทำงานจริงแบบจำลอง","See it in action (simulated)")}</h2>
         <HeroStage />
         <div className="mute lp-note">{t("ภาพตัวอย่างจำลอง ราคาและข้อความไม่ใช่ข้อมูลตลาดจริง","Simulated demo. Prices and messages are not real market data.")}</div>
       </section>
 
-      <section className="lp-sec" aria-labelledby="how">
-        <h2 id="how" className="lp-h2 rv">{t("จากกราฟถึงออเดอร์ ใน 3 ขั้น","From chart to order in 3 steps")}</h2>
+      <section className="lp-sec" id="how" aria-labelledby="how-h">
+        <h2 id="how-h" className="lp-h2 rv">{t("จากกราฟถึงออเดอร์ ใน 3 ขั้น","From chart to order in 3 steps")}</h2>
         <ol className="lp-steps">
           {steps.map((s, i) => (
             <li key={s.t} className="rv" style={{ transitionDelay: `${i * 120}ms` }}>
@@ -173,7 +269,7 @@ export default function Landing({ themeBtn, children, onLogin, loginErr }: { the
         </ol>
       </section>
 
-      <section className="lp-sec lp-split" aria-labelledby="safe">
+      <section className="lp-sec lp-split" id="safe-sec" aria-labelledby="safe">
         <div>
           <h2 id="safe" className="lp-h2 rv">{t("ควบคุมความเสี่ยงได้ในตัว","Built-in risk control")}</h2>
           <div className="lp-ai-row rv">
@@ -209,7 +305,7 @@ export default function Landing({ themeBtn, children, onLogin, loginErr }: { the
         </div>
       </section>
 
-      <footer className="lp-foot mute">{t("การเทรดมีความเสี่ยง ผลในอดีตและภาพตัวอย่างไม่รับประกันผลในอนาคต ควรทดสอบกับบัญชีทดลองก่อนใช้เงินจริง","Trading involves risk. Past results and demo visuals do not guarantee future results. Test on a demo account before using real money.")}</footer>
+      <footer className="lp-foot mute"><div className="lp2-foot-brand">Pichai Fintech · MT5 Signal Hub</div>{t("การเทรดมีความเสี่ยง ผลในอดีตและภาพตัวอย่างไม่รับประกันผลในอนาคต ควรทดสอบกับบัญชีทดลองก่อนใช้เงินจริง","Trading involves risk. Past results and demo visuals do not guarantee future results. Test on a demo account before using real money.")}</footer>
     </div>
   );
 }
