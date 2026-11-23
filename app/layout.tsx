@@ -3,9 +3,11 @@ import { IBM_Plex_Sans_Thai } from 'next/font/google';
 import Galaxy from '@/components/Galaxy';
 import Sky from '@/components/Sky';
 import { LangProvider } from '@/lib/i18n';
+import SiteFooter from '@/components/SiteFooter';
+import PdpaConsent from '@/components/PdpaConsent';
 
 const font = IBM_Plex_Sans_Thai({ subsets: ['thai', 'latin'], weight: ['400', '500', '600', '700'], display: 'swap' });
-export const metadata = { title: 'MT5 Signal Hub', description: 'AI วิเคราะห์สภาพตลาดทุกคู่เงินใน MT5 เลือกกลยุทธ์ที่เหมาะ และสั่งออเดอร์จากเทเลแกรม' };
+export const metadata = { title: 'Pichai Fintech | MT5 Signal Hub', description: 'AI วิเคราะห์สภาพตลาดทุกคู่เงินใน MT5 เลือกกลยุทธ์ที่เหมาะ และสั่งออเดอร์จากเทเลแกรม' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -16,6 +18,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Sky />
           <Galaxy />
           {children}
+          <SiteFooter />
+          <PdpaConsent />
         </LangProvider>
       </body>
     </html>
