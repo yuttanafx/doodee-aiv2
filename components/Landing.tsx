@@ -13,7 +13,7 @@ const EA_VIEW = `https://drive.google.com/file/d/${DRIVE_ID}/view?usp=sharing`;
 const Icon = ({ d, size = 22 }: { d: string; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
 );
-const TG_URL = 'https://t.me/Hub_signal_propfirmSp_bot';
+const TG_URL = 'https://t.me/Hub_signal_propfirmth_bot';
 const LINE_URL = 'https://lin.ee/W3nixLK';
 const LINE_ICON = 'M21 11.5C21 7.4 16.97 4 12 4S3 7.4 3 11.5c0 3.6 3.2 6.6 7.5 7.4l-.3 2.1 4.3-2.6C18.7 17.5 21 14.8 21 11.5Z';
 const PLANE = 'M21.5 3.5 2.8 10.7c-.9.4-.9 1.2 0 1.5l4.6 1.4 1.8 5.5c.2.6.9.7 1.3.3l2.6-2.4 4.7 3.5c.7.5 1.4.2 1.6-.7l3.1-15.2c.2-1-.4-1.5-1-1.1ZM8 13.4l9.6-6-7.4 7.2-.3 3.2L8 13.4Z';
