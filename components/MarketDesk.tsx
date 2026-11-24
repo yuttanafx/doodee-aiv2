@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useLang } from '@/lib/i18n';
+import NewsReport from '@/components/NewsReport';
 
 // Market Desk: TradingView chart + AI chat (typed or spoken) + live video / news tabs.
 // The AI answers through /api/ai/chat, which uses the MEMBER'S OWN API key (see lib/aiconf.ts). No key = no AI, so we guide them to sign up / add a key.
@@ -11,6 +12,7 @@ type Props = {
   onLogin?: (password: string) => Promise<void> | void;
   loginErr?: string;
   acctHeader?: string;                          // admin viewing another account
+  news?: any;                                   // /api/state news block (events for the automatic news report)
 };
 
 const SYMBOLS: [string, string][] = [
@@ -68,7 +70,7 @@ function handleOf(raw: string): string | null {
     const a = u.pathname.match(/^\/(@[\w.\-]+)/); if (a) return a[1]; const b = u.pathname.match(/^\/(?:user|c)\/([\w.\-]+)/); return b ? 'user:' + b[1] : null; } catch { return null; }
 }
 
-export default function MarketDesk({ pw, hasKey, onLogin, loginErr, acctHeader }: Props) {
+export default function MarketDesk({ pw, hasKey, onLogin, loginErr, acctHeader, news }: Props) {
   const { t, lang } = useLang();
   const [sym, setSym] = useState(SYMBOLS[0]);
   const [tf, setTf] = useState('60');
@@ -231,6 +233,7 @@ export default function MarketDesk({ pw, hasKey, onLogin, loginErr, acctHeader }
         </>}
         {tab === 'news' && <div className="desk-tv desk-tall"><TV src="embed-widget-timeline" config={{ feedMode: 'all_symbols', isTransparent: true, displayMode: 'regular', width: '100%', height: '100%', colorTheme: theme, locale: tvLang }} height="100%" /></div>}
         {tab === 'cal' && <div className="desk-tv desk-tall"><TV src="embed-widget-events" config={{ isTransparent: true, width: '100%', height: '100%', colorTheme: theme, locale: tvLang, importanceFilter: '0,1', countryFilter: 'us,eu,gb,jp,cn,th' }} height="100%" /></div>}
+        {news && <NewsReport news={news} pw={pw} canAsk={canAsk} acctHeader={acctHeader} speakOn={speakOn} speak={speak} />}
       </div>
     </div>
   );
