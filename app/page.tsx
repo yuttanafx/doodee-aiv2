@@ -446,7 +446,7 @@ export default function Page() {
       {!isAdmin && data?.me && <div id="sec-billing"><MemberBilling api={api} /></div>}
 
       <section id="sec-desk" aria-label={t('กราฟและถาม AI', 'Chart and AI')}>
-        <MarketDesk pw={key} hasKey={Object.values(data?.ai?.keys ?? {}).some(Boolean)} acctHeader={acct !== 'main' ? acct : undefined} />
+        <MarketDesk pw={key} hasKey={Object.values(data?.ai?.keys ?? {}).some(Boolean)} acctHeader={acct !== 'main' ? acct : undefined} news={data?.news} />
       </section>
 
       <section id="sec-ai" className="card" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 28, alignItems: 'center' }}>
