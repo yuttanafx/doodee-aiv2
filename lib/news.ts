@@ -91,9 +91,12 @@ export async function noteSymbol(sym: string) {
 }
 
 export async function newsView(s: Settings, symbols: string[]) {
-  const now = Date.now(), feed = s.newsOn ? await getNews(now) : { events: [], status: 'ok' as const, fetchedAt: 0 };
+  const now = Date.now(), feedAll = await getNews(now); // the calendar is cached for an hour, so reading it even when the guard is off costs nothing extra
+  const feed = s.newsOn ? feedAll : { events: [], status: 'ok' as const, fetchedAt: 0, error: undefined as string | undefined };
   const groups = await Promise.all(symbols.map(async (symbol) => { const n = await newsFor(symbol, s, now, feed); return { symbol, active: n.active, resumeAt: n.resumeAt, next: n.next }; }));
   const curs = new Set(symbols.flatMap(currenciesOf));
   const upcoming = feed.events.filter((e) => curs.has(e.cur) && (e.impact === 'High' || s.newsImpact === 'Medium') && e.ts + s.newsAfter * 60_000 > now && e.ts < now + 24 * 3600_000).slice(0, 8);
-  return { enabled: s.newsOn, before: s.newsBefore, after: s.newsAfter, impact: s.newsImpact, until: s.newsUntil, status: feed.status, error: feed.error, fetchedAt: feed.fetchedAt, groups, upcoming };
+  // for the dashboard's automatic news report (works even when the trading guard is off): events of the traded currencies from 24 h ago to 24 h ahead
+  const reports = feedAll.events.filter((e) => curs.has(e.cur) && (e.impact === 'High' || s.newsImpact === 'Medium') && e.ts > now - 24 * 3600_000 && e.ts < now + 24 * 3600_000).sort((a, b) => a.ts - b.ts).slice(0, 30);
+  return { reports, enabled: s.newsOn, before: s.newsBefore, after: s.newsAfter, impact: s.newsImpact, until: s.newsUntil, status: feed.status, error: feed.error, fetchedAt: feed.fetchedAt, groups, upcoming };
 }
